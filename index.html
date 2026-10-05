@@ -15,13 +15,11 @@
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
   main { height: 100dvh; display: flex; flex-direction: column; align-items: center;
     justify-content: center; gap: 28px; padding: 16px; text-align: center; }
-  h1 { margin: 0; font-size: 15px; letter-spacing: .3em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
   #cringe { width: min(72vw, 320px); aspect-ratio: 1; border-radius: 50%; border: 0; cursor: pointer;
     background: radial-gradient(circle at 35% 30%, #ff6b88, var(--btn) 45%, var(--btn-dark));
     box-shadow: 0 14px 0 #7a0b27, 0 24px 50px rgba(255,45,85,.35);
     color: #fff; font-size: clamp(28px, 9vw, 42px); font-weight: 900; letter-spacing: .04em;
     transition: transform .08s, box-shadow .08s; user-select: none; }
-  #cringe span { display: block; font-size: 1.6em; line-height: 1.1; }
   #cringe:active { transform: translateY(10px); box-shadow: 0 4px 0 #7a0b27, 0 10px 30px rgba(255,45,85,.3); }
   #cringe:disabled { filter: grayscale(.6) brightness(.8); }
   .hint { color: var(--muted); font-size: 14px; min-height: 1.2em; }
@@ -44,8 +42,7 @@
 </head>
 <body>
 <main>
-  <h1>Press if you dare</h1>
-  <button id="cringe" disabled aria-label="Play a random cringe clip"><span>😬</span>CRINGE</button>
+  <button id="cringe" disabled aria-label="Play a random cringe clip">CRINGE</button>
   <div class="hint" id="hint">Loading…</div>
 </main>
 
@@ -152,12 +149,17 @@
     }
   }
 
-  function close() {
+  // Silence every player, so the old clip never keeps playing under the next one.
+  function stopAll() {
     clearTimeout(stallTimer);
     if (player) player.stopVideo();
     video.pause();
     video.controls = false;
     embed.removeAttribute("src");
+  }
+
+  function close() {
+    stopAll();
     stage.classList.remove("on");
     stage.setAttribute("aria-hidden", "true");
     cueNext();
@@ -169,7 +171,7 @@
 
   $("cringe").addEventListener("click", () => ready && play());
   $("close").addEventListener("click", close);
-  $("again").addEventListener("click", () => { video.pause(); embed.removeAttribute("src"); cueNext(); play(); });
+  $("again").addEventListener("click", () => { stopAll(); cueNext(); play(); });
 
   CLIPS.filter(isReddit).forEach(resolveReddit);
 
