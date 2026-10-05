@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#140f1a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Cringe Button</title>
+<link rel="manifest" href="manifest.json">
+<style>
+  :root { --bg: #140f1a; --fg: #f4eef8; --muted: #9a8fa6; --btn: #ff2d55; --btn-dark: #b3123a; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
+  main { height: 100dvh; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 28px; padding: 16px; text-align: center; }
+  h1 { margin: 0; font-size: 15px; letter-spacing: .3em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  #cringe { width: min(72vw, 320px); aspect-ratio: 1; border-radius: 50%; border: 0; cursor: pointer;
+    background: radial-gradient(circle at 35% 30%, #ff6b88, var(--btn) 45%, var(--btn-dark));
+    box-shadow: 0 14px 0 #7a0b27, 0 24px 50px rgba(255,45,85,.35);
+    color: #fff; font-size: clamp(28px, 9vw, 42px); font-weight: 900; letter-spacing: .04em;
+    transition: transform .08s, box-shadow .08s; user-select: none; }
+  #cringe span { display: block; font-size: 1.6em; line-height: 1.1; }
+  #cringe:active { transform: translateY(10px); box-shadow: 0 4px 0 #7a0b27, 0 10px 30px rgba(255,45,85,.3); }
+  #cringe:disabled { filter: grayscale(.6) brightness(.8); }
+  .hint { color: var(--muted); font-size: 14px; min-height: 1.2em; }
+
+  #stage { position: fixed; inset: 0; background: #000; display: flex; flex-direction: column;
+    opacity: 0; pointer-events: none; transition: opacity .15s; }
+  #stage.on { opacity: 1; pointer-events: auto; }
+  #playerWrap { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 0; }
+  #playerBox { width: 100%; aspect-ratio: 16/9; max-height: 100%; }
+  #playerBox iframe { width: 100%; height: 100%; border: 0; display: block; }
+  .bar { display: flex; gap: 12px; align-items: center; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); }
+  .bar .title { flex: 1; font-size: 14px; color: var(--muted); text-align: left; overflow: hidden;
+    white-space: nowrap; text-overflow: ellipsis; }
+  .bar button { border: 0; border-radius: 999px; padding: 12px 18px; font-size: 15px; font-weight: 700; cursor: pointer; }
+  #again { background: var(--btn); color: #fff; }
+  #close { background: #2a2233; color: var(--fg); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Press if you dare</h1>
+  <button id="cringe" disabled aria-label="Play a random cringe clip"><span>😬</span>CRINGE</button>
+  <div class="hint" id="hint">Loading…</div>
+</main>
+
+<div id="stage" aria-hidden="true">
+  <div id="playerWrap"><div id="playerBox"><div id="player"></div></div></div>
+  <div class="bar">
+    <div class="title" id="title"></div>
+    <button id="close" aria-label="Close">✕</button>
+    <button id="again">Another 😬</button>
+  </div>
+</div>
+
+<script src="clips.js"></script>
+<script>
+  const $ = (id) => document.getElementById(id);
+  const stage = $("stage"), hint = $("hint");
+  let player, ready = false, current = null, bag = [], stallTimer;
+
+  // Shuffle bag: every clip plays once before any repeats.
+  function nextClip() {
+    if (!bag.length) {
+      bag = CLIPS.slice().sort(() => Math.random() - 0.5);
+      if (current && bag[0] === current && bag.length > 1) bag.push(bag.shift());
+    }
+    return bag.shift();
+  }
+
+  function cueNext() {
+    current = nextClip();
+    player.cueVideoById({ videoId: current.id, startSeconds: current.start, endSeconds: current.end });
+  }
+
+  // The next clip is always cued in advance, so a tap only calls playVideo().
+  // Calling it synchronously inside the tap is what lets phones start it with sound.
+  function play() {
+    stage.classList.add("on");
+    stage.setAttribute("aria-hidden", "false");
+    $("title").textContent = current.title;
+    player.unMute();
+    player.playVideo();
+    clearTimeout(stallTimer);
+    stallTimer = setTimeout(() => {
+      if (player.getPlayerState() !== YT.PlayerState.PLAYING) $("title").textContent = "Tap the video to start ▶";
+    }, 2000);
+  }
+
+  function close() {
+    clearTimeout(stallTimer);
+    player.stopVideo();
+    stage.classList.remove("on");
+    stage.setAttribute("aria-hidden", "true");
+    cueNext();
+  }
+
+  $("cringe").addEventListener("click", () => ready && play());
+  $("close").addEventListener("click", close);
+  $("again").addEventListener("click", () => { cueNext(); play(); });
+
+  window.onYouTubeIframeAPIReady = () => {
+    player = new YT.Player("player", {
+      width: "100%", height: "100%",
+      playerVars: { playsinline: 1, controls: 1, rel: 0, modestbranding: 1, fs: 1 },
+      events: {
+        onReady: () => {
+          ready = true; cueNext();
+          $("cringe").disabled = false; hint.textContent = "Sound on 🔊";
+        },
+        onStateChange: (e) => {
+          if (e.data === YT.PlayerState.PLAYING) $("title").textContent = current.title;
+          if (e.data === YT.PlayerState.ENDED) setTimeout(close, 600);
+        },
+        // Clip removed or embedding disabled: skip to another one.
+        onError: () => { if (stage.classList.contains("on")) { cueNext(); play(); } else cueNext(); },
+      },
+    });
+  };
+</script>
+<script src="https://www.youtube.com/iframe_api"></script>
+</body>
+</html>

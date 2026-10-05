@@ -1,0 +1,8 @@
+{
+  "name": "Cringe Button",
+  "short_name": "Cringe",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#140f1a",
+  "theme_color": "#140f1a"
+}
