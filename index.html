@@ -32,6 +32,8 @@
   #playerWrap { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 0; }
   #playerBox { width: 100%; aspect-ratio: 16/9; max-height: 100%; }
   #playerBox iframe { width: 100%; height: 100%; border: 0; display: block; }
+  #video, #embed { width: 100%; height: 100%; border: 0; display: block; object-fit: contain; background: #000; }
+  .hidden { display: none !important; }
   .bar { display: flex; gap: 12px; align-items: center; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); }
   .bar .title { flex: 1; font-size: 14px; color: var(--muted); text-align: left; overflow: hidden;
     white-space: nowrap; text-overflow: ellipsis; }
@@ -48,7 +50,11 @@
 </main>
 
 <div id="stage" aria-hidden="true">
-  <div id="playerWrap"><div id="playerBox"><div id="player"></div></div></div>
+  <div id="playerWrap">
+    <div id="playerBox"><div id="player"></div></div>
+    <video id="video" class="hidden" playsinline preload="auto"></video>
+    <iframe id="embed" class="hidden" allow="autoplay; fullscreen" title="Reddit clip"></iframe>
+  </div>
   <div class="bar">
     <div class="title" id="title"></div>
     <button id="close" aria-label="Close">✕</button>
@@ -57,10 +63,26 @@
 </div>
 
 <script src="clips.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.20/dist/hls.min.js"></script>
 <script>
   const $ = (id) => document.getElementById(id);
-  const stage = $("stage"), hint = $("hint");
-  let player, ready = false, current = null, bag = [], stallTimer;
+  const stage = $("stage"), hint = $("hint"), video = $("video"), embed = $("embed"), box = $("playerBox");
+  const MAX_SECONDS = 60;
+  const nativeHls = video.canPlayType("application/vnd.apple.mpegurl") !== "";
+  const redditHls = {}; // post id -> HLS playlist URL, filled in the background
+  let player, ready = false, current = null, bag = [], stallTimer, hls;
+
+  const isReddit = (c) => !!c.reddit;
+
+  // Look up each Reddit post's video once at startup, so a tap can start it right away.
+  async function resolveReddit(c) {
+    try {
+      const res = await fetch(`https://www.reddit.com/comments/${c.reddit}.json?raw_json=1`);
+      const post = (await res.json())[0].data.children[0].data;
+      const media = post.secure_media || post.media || post.crosspost_parent_list?.[0]?.secure_media;
+      if (media?.reddit_video?.hls_url) redditHls[c.reddit] = media.reddit_video.hls_url;
+    } catch (e) { /* falls back to Reddit's own embed player */ }
+  }
 
   // Shuffle bag: every clip plays once before any repeats.
   function nextClip() {
@@ -71,36 +93,85 @@
     return bag.shift();
   }
 
-  function cueNext() {
-    current = nextClip();
-    player.cueVideoById({ videoId: current.id, startSeconds: current.start, endSeconds: current.end });
+  function loadVideo(url) {
+    video.dataset.src = url;
+    if (hls) { hls.destroy(); hls = null; }
+    if (nativeHls || !window.Hls?.isSupported()) { video.src = url; return; }
+    hls = new Hls();
+    hls.on(Hls.Events.ERROR, (_, d) => { if (d.fatal) showEmbed(); });
+    hls.loadSource(url);
+    hls.attachMedia(video);
   }
 
-  // The next clip is always cued in advance, so a tap only calls playVideo().
+  function cueNext() {
+    current = nextClip();
+    if (!isReddit(current)) {
+      player.cueVideoById({ videoId: current.id, startSeconds: current.start, endSeconds: current.end });
+    } else if (redditHls[current.reddit]) {
+      loadVideo(redditHls[current.reddit]);
+    }
+  }
+
+  function show(el) {
+    for (const x of [box, video, embed]) x.classList.toggle("hidden", x !== el);
+  }
+
+  function showEmbed() {
+    show(embed);
+    embed.src = `https://embed.reddit.com/r/${current.sub}/comments/${current.reddit}/?embed=true&showmedia=true`;
+    $("title").textContent = "Tap the video to start ▶";
+  }
+
+  // The next clip is always cued in advance, so a tap only has to call play.
   // Calling it synchronously inside the tap is what lets phones start it with sound.
   function play() {
     stage.classList.add("on");
     stage.setAttribute("aria-hidden", "false");
     $("title").textContent = current.title;
-    player.unMute();
-    player.playVideo();
     clearTimeout(stallTimer);
-    stallTimer = setTimeout(() => {
-      if (player.getPlayerState() !== YT.PlayerState.PLAYING) $("title").textContent = "Tap the video to start ▶";
-    }, 2000);
+    if (!isReddit(current)) {
+      show(box);
+      player.unMute();
+      player.playVideo();
+      stallTimer = setTimeout(() => {
+        if (player.getPlayerState() !== YT.PlayerState.PLAYING) $("title").textContent = "Tap the video to start ▶";
+      }, 2000);
+    } else if (redditHls[current.reddit]) {
+      // Not cued yet if the lookup finished after this clip was picked.
+      if (video.dataset.src !== redditHls[current.reddit]) loadVideo(redditHls[current.reddit]);
+      show(video);
+      video.muted = false;
+      video.currentTime = 0;
+      const clip = current;
+      video.play().catch(() => {
+        if (clip !== current) return;
+        video.controls = true; $("title").textContent = "Tap the video to start ▶";
+      });
+    } else {
+      showEmbed();
+    }
   }
 
   function close() {
     clearTimeout(stallTimer);
-    player.stopVideo();
+    if (player) player.stopVideo();
+    video.pause();
+    video.controls = false;
+    embed.removeAttribute("src");
     stage.classList.remove("on");
     stage.setAttribute("aria-hidden", "true");
     cueNext();
   }
 
+  video.addEventListener("ended", () => setTimeout(close, 600));
+  video.addEventListener("timeupdate", () => { if (video.currentTime >= MAX_SECONDS) close(); });
+  video.addEventListener("error", () => { if (stage.classList.contains("on") && isReddit(current)) showEmbed(); });
+
   $("cringe").addEventListener("click", () => ready && play());
   $("close").addEventListener("click", close);
-  $("again").addEventListener("click", () => { cueNext(); play(); });
+  $("again").addEventListener("click", () => { video.pause(); embed.removeAttribute("src"); cueNext(); play(); });
+
+  CLIPS.filter(isReddit).forEach(resolveReddit);
 
   window.onYouTubeIframeAPIReady = () => {
     player = new YT.Player("player", {
@@ -112,6 +183,7 @@
           $("cringe").disabled = false; hint.textContent = "Sound on 🔊";
         },
         onStateChange: (e) => {
+          if (isReddit(current)) return;
           if (e.data === YT.PlayerState.PLAYING) $("title").textContent = current.title;
           if (e.data === YT.PlayerState.ENDED) setTimeout(close, 600);
         },
