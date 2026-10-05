@@ -1,0 +1,35 @@
+# Trial: can a GitHub runner download and trim the clips? Output is uploaded as a
+# workflow artifact only; nothing is committed.
+name: fetch-clips
+on:
+  push:
+    branches: [fetch-clips]
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg && pip install -q yt-dlp
+      - name: Download and trim
+        run: |
+          mkdir -p clips
+          node -e '
+            global.window = {}; require("./clips.js");
+            for (const c of window.CLIPS) {
+              const url = c.reddit ? `https://www.reddit.com/r/${c.sub}/comments/${c.reddit}/` : `https://www.youtube.com/watch?v=${c.id}`;
+              const name = c.reddit || c.id;
+              const sec = c.reddit ? "*0-60" : `*${c.start}-${Math.min(c.end, c.start + 60)}`;
+              console.log([name, url, sec].join("\t"));
+            }' > list.tsv
+          while IFS=$'\t' read -r name url sec; do
+            echo "::group::$name"
+            yt-dlp -q --no-warnings -f "bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720]/b" \
+              --download-sections "$sec" --force-keyframes-at-cuts --merge-output-format mp4 \
+              -o "clips/$name.%(ext)s" "$url" && echo "OK $name" || echo "FAILED $name"
+            echo "::endgroup::"
+          done < list.tsv
+          ls -la clips
+      - uses: actions/upload-artifact@v4
+        with:
+          name: clips
+          path: clips/
