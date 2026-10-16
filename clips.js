@@ -7,6 +7,7 @@ window.CLIPS = [
   { id: "Kq7qGjZVOG0", start: 0,   end: 60,  title: "Love on the Spectrum: Connor speed dating" },
   { id: "73DjkK3XYRA", start: 0,   end: 60,  title: "Love on the Spectrum: Tanner's first date" },
   { id: "Eh92RZdrYY4", start: 0,   end: 60,  title: "כוכב נולד: האודישנים" },
+  { id: "ej1zK3w-jr0", start: 0,   end: 60,  title: "עינת שרוף בערוץ 24" },
   { reddit: "1ws8m81", sub: "cringereels", title: "Come get your uncle" },
   { reddit: "1wrkr55", sub: "cringereels", title: "The $2000 influencer academy" },
   { reddit: "1wt1z7b", sub: "cringereels", title: "You want some eggs?" },

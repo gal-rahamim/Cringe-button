@@ -67,7 +67,7 @@
   const MAX_SECONDS = 60;
   const nativeHls = video.canPlayType("application/vnd.apple.mpegurl") !== "";
   const redditHls = {}; // post id -> HLS playlist URL, filled in the background
-  let player, ready = false, current = null, bag = [], stallTimer, hls;
+  let player, ready = false, current = null, bag = [], stallTimer, endWatch, hls;
 
   const isReddit = (c) => !!c.reddit;
 
@@ -133,6 +133,12 @@
       stallTimer = setTimeout(() => {
         if (player.getPlayerState() !== YT.PlayerState.PLAYING) $("title").textContent = "Tap the video to start ▶";
       }, 2000);
+      // YouTube often just pauses at the end time instead of reporting "ended",
+      // so watch the clock and go back to the button once the clip is over.
+      const clip = current;
+      endWatch = setInterval(() => {
+        if (player.getCurrentTime() >= clip.end - 0.3) finish(clip);
+      }, 250);
     } else if (redditHls[current.reddit]) {
       // Not cued yet if the lookup finished after this clip was picked.
       if (video.dataset.src !== redditHls[current.reddit]) loadVideo(redditHls[current.reddit]);
@@ -152,6 +158,7 @@
   // Silence every player, so the old clip never keeps playing under the next one.
   function stopAll() {
     clearTimeout(stallTimer);
+    clearInterval(endWatch);
     if (player) player.stopVideo();
     video.pause();
     video.controls = false;
@@ -165,8 +172,14 @@
     cueNext();
   }
 
-  video.addEventListener("ended", () => setTimeout(close, 600));
-  video.addEventListener("timeupdate", () => { if (video.currentTime >= MAX_SECONDS) close(); });
+  // A clip that played to its end returns to the CRINGE button, unless the
+  // viewer already moved on to another clip.
+  function finish(clip) {
+    if (clip === current && stage.classList.contains("on")) close();
+  }
+
+  video.addEventListener("ended", () => { const clip = current; setTimeout(() => finish(clip), 600); });
+  video.addEventListener("timeupdate", () => { if (video.currentTime >= MAX_SECONDS) finish(current); });
   video.addEventListener("error", () => { if (stage.classList.contains("on") && isReddit(current)) showEmbed(); });
 
   $("cringe").addEventListener("click", () => ready && play());
@@ -187,7 +200,7 @@
         onStateChange: (e) => {
           if (isReddit(current)) return;
           if (e.data === YT.PlayerState.PLAYING) $("title").textContent = current.title;
-          if (e.data === YT.PlayerState.ENDED) setTimeout(close, 600);
+          if (e.data === YT.PlayerState.ENDED) { const clip = current; setTimeout(() => finish(clip), 600); }
         },
         // Clip removed or embedding disabled: skip to another one.
         onError: () => { if (stage.classList.contains("on")) { cueNext(); play(); } else cueNext(); },
