@@ -4,7 +4,7 @@
 window.CLIPS = [
   { id: "Psu9eE8ualg", start: 178, end: 230, title: "The Office: Toby touches Pam's knee" },
   { id: "s_EHezMKD7Q", start: 0,   end: 60,  title: "The Office: getting out of an awkward situation" },
-  { id: "Kq7qGjZVOG0", start: 0,   end: 60,  title: "Love on the Spectrum: Connor speed dating" },
+  { id: "A9g_-PqXfGY", start: 54,  end: 114, title: "דודו טופז: זורקים כדורי שוקולד לפה" },
   { id: "73DjkK3XYRA", start: 0,   end: 60,  title: "Love on the Spectrum: Tanner's first date" },
   { id: "Eh92RZdrYY4", start: 0,   end: 60,  title: "כוכב נולד: האודישנים" },
   { id: "ej1zK3w-jr0", start: 0,   end: 60,  title: "עינת שרוף בערוץ 24" },
