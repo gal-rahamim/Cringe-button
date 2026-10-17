@@ -67,7 +67,7 @@
   const MAX_SECONDS = 60;
   const nativeHls = video.canPlayType("application/vnd.apple.mpegurl") !== "";
   const redditHls = {}; // post id -> HLS playlist URL, filled in the background
-  let player, ready = false, current = null, bag = [], stallTimer, endWatch, hls;
+  let player, ready = false, current = null, bag = [], stallTimer, hls;
 
   const isReddit = (c) => !!c.reddit;
 
@@ -133,12 +133,6 @@
       stallTimer = setTimeout(() => {
         if (player.getPlayerState() !== YT.PlayerState.PLAYING) $("title").textContent = "Tap the video to start ▶";
       }, 2000);
-      // YouTube often just pauses at the end time instead of reporting "ended",
-      // so watch the clock and go back to the button once the clip is over.
-      const clip = current;
-      endWatch = setInterval(() => {
-        if (player.getCurrentTime() >= clip.end - 0.3) finish(clip);
-      }, 250);
     } else if (redditHls[current.reddit]) {
       // Not cued yet if the lookup finished after this clip was picked.
       if (video.dataset.src !== redditHls[current.reddit]) loadVideo(redditHls[current.reddit]);
@@ -158,7 +152,6 @@
   // Silence every player, so the old clip never keeps playing under the next one.
   function stopAll() {
     clearTimeout(stallTimer);
-    clearInterval(endWatch);
     if (player) player.stopVideo();
     video.pause();
     video.controls = false;
